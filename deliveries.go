@@ -2,6 +2,14 @@ package rmq
 
 type Deliveries []Delivery
 
+func (deliveries Deliveries) Extract() []Delivery {
+	extractedDeliveries := make([]Delivery, len(deliveries))
+	for i, delivery := range deliveries {
+		extractedDeliveries[i] = delivery
+	}
+	return extractedDeliveries
+}
+
 func (deliveries Deliveries) Payloads() []string {
 	payloads := make([]string, len(deliveries))
 	for i, delivery := range deliveries {
