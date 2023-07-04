@@ -9,6 +9,7 @@ import (
 
 type Delivery interface {
 	Payload() string
+	SetPayload(payload string) error
 
 	Ack() error
 	Reject() error
@@ -42,6 +43,13 @@ func (delivery *redisDelivery) String() string {
 
 func (delivery *redisDelivery) Payload() string {
 	return delivery.clearPayload
+}
+
+func (delivery *redisDelivery) SetPayload(payload string) error {
+	delivery.payload = payload
+	delivery.clearPayload = payload
+
+	return nil
 }
 
 // blocking versions of the functions below with the following behavior:
