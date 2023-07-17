@@ -47,11 +47,37 @@ func (delivery *redisDelivery) Payload() string {
 
 // SetPayload updates delivery's payload and marks it as Rejected.
 func (delivery *redisDelivery) SetPayload(payload string) error {
-	delivery.payload = payload
-	delivery.clearPayload = payload
+	// Copy original delivery.
+	newDelivery := *delivery
+	newDelivery.payload = payload
+	newDelivery.clearPayload = payload
 
 	// Move to Rejected with new payload.
-	return delivery.move(delivery.rejectedKey)
+	errorCount := 0
+	for {
+		// Add new delivery to the list.
+		_, err := newDelivery.redisClient.LPush(delivery.rejectedKey, newDelivery.Payload())
+		if err == nil { // success
+			break
+		}
+		// error
+
+		errorCount++
+
+		select { // try to add error to channel, but don't block
+		case newDelivery.errChan <- &DeliveryError{Delivery: &newDelivery, RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		if err := newDelivery.ctx.Err(); err != nil {
+			return ErrorConsumingStopped
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	// Ack original delivery.
+	return delivery.Ack()
 }
 
 // blocking versions of the functions below with the following behavior:
