@@ -45,11 +45,13 @@ func (delivery *redisDelivery) Payload() string {
 	return delivery.clearPayload
 }
 
+// SetPayload updates delivery's payload and marks it as Rejected.
 func (delivery *redisDelivery) SetPayload(payload string) error {
 	delivery.payload = payload
 	delivery.clearPayload = payload
 
-	return nil
+	// Move to Rejected with new payload.
+	return delivery.move(delivery.rejectedKey)
 }
 
 // blocking versions of the functions below with the following behavior:
