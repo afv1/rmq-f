@@ -9,7 +9,10 @@ import (
 
 type Delivery interface {
 	Payload() string
+	// SetPayload sets the new payload and move delivery to the Ready List.
 	SetPayload(payload string) error
+	// SetPayloadAndReject sets the new payload and move delivery to the Rejected List.
+	SetPayloadAndReject(payload string) error
 
 	Ack() error
 	Reject() error
@@ -26,6 +29,7 @@ type redisDelivery struct {
 	payload      string
 	clearPayload string
 	header       http.Header
+	readyKey     string
 	unackedKey   string
 	rejectedKey  string
 	pushKey      string
@@ -45,39 +49,14 @@ func (delivery *redisDelivery) Payload() string {
 	return delivery.clearPayload
 }
 
-// SetPayload updates delivery's payload and marks it as Rejected.
+// SetPayload implements Delivery interface.
 func (delivery *redisDelivery) SetPayload(payload string) error {
-	// Copy original delivery.
-	newDelivery := *delivery
-	newDelivery.payload = payload
-	newDelivery.clearPayload = payload
+	return delivery.setPayload(payload, delivery.readyKey)
+}
 
-	// Move to Rejected with new payload.
-	errorCount := 0
-	for {
-		// Add new delivery to the list.
-		_, err := newDelivery.redisClient.LPush(delivery.rejectedKey, newDelivery.Payload())
-		if err == nil { // success
-			break
-		}
-		// error
-
-		errorCount++
-
-		select { // try to add error to channel, but don't block
-		case newDelivery.errChan <- &DeliveryError{Delivery: &newDelivery, RedisErr: err, Count: errorCount}:
-		default:
-		}
-
-		if err := newDelivery.ctx.Err(); err != nil {
-			return ErrorConsumingStopped
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	// Ack original delivery.
-	return delivery.Ack()
+// SetPayloadAndReject implements Delivery interface.
+func (delivery *redisDelivery) SetPayloadAndReject(payload string) error {
+	return delivery.setPayload(payload, delivery.rejectedKey)
 }
 
 // blocking versions of the functions below with the following behavior:
@@ -148,6 +127,44 @@ func (delivery *redisDelivery) move(key string) error {
 		time.Sleep(time.Second)
 	}
 
+	return delivery.Ack()
+}
+
+// setPayload copies original delivery, sets the payload,
+// adds delivery to the target queue by queueKey and Ack the original delivery to forget it.
+func (delivery *redisDelivery) setPayload(payload string, queueKey string) error {
+	// Copy original delivery.
+	newDelivery := *delivery
+
+	// Update deliveries payload.
+	newDelivery.payload = payload
+	newDelivery.clearPayload = payload
+
+	// Move delivery to the Rejected queue.
+	errorCount := 0
+	for {
+		// Add new delivery to the Rejected list.
+		_, err := newDelivery.redisClient.LPush(queueKey, newDelivery.Payload())
+		if err == nil { // success
+			break
+		}
+		// error
+
+		errorCount++
+
+		select { // try to add error to channel, but don't block
+		case newDelivery.errChan <- &DeliveryError{Delivery: &newDelivery, RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		if err = newDelivery.ctx.Err(); err != nil {
+			return ErrorConsumingStopped
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	// Ack original delivery to forget it.
 	return delivery.Ack()
 }
 

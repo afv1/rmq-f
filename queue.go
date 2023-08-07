@@ -231,6 +231,7 @@ func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
 	rd := &redisDelivery{
 		ctx:         queue.ackCtx,
 		payload:     payload,
+		readyKey:    queue.readyKey,
 		unackedKey:  queue.unackedKey,
 		rejectedKey: queue.rejectedKey,
 		pushKey:     queue.pushKey,
