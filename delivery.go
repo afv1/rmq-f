@@ -17,6 +17,7 @@ type Delivery interface {
 	Ack() error
 	Reject() error
 	Push() error
+	Return() error
 }
 
 var (
@@ -102,6 +103,10 @@ func (delivery *redisDelivery) Push() error {
 	}
 
 	return delivery.move(delivery.pushKey)
+}
+
+func (delivery *redisDelivery) Return() error {
+	return delivery.move(delivery.readyKey)
 }
 
 func (delivery *redisDelivery) move(key string) error {

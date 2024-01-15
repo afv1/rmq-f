@@ -37,6 +37,10 @@ func (deliveries Deliveries) Push() (errMap map[int]error) {
 	return deliveries.each(Delivery.Push)
 }
 
+func (deliveries Deliveries) Return() (errMap map[int]error) {
+	return deliveries.each(Delivery.Return)
+}
+
 // helper functions
 
 func (deliveries Deliveries) each(
