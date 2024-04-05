@@ -61,6 +61,7 @@ type redisQueue struct {
 	ackCtx           context.Context
 	ackCancel        context.CancelFunc
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
+	sigChannels      *SigChannels
 }
 
 func newQueue(
@@ -96,6 +97,7 @@ func newQueue(
 		consumingStopped: consumingStopped,
 		ackCtx:           ackCtx,
 		ackCancel:        ackCancel,
+		sigChannels:      NewSigChannels(),
 	}
 	return queue
 }
@@ -335,6 +337,24 @@ func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout t
 	return name, nil
 }
 
+// AddBatchConsumerPro is similar to AddBatchConsumer, but with context.Context and channel for external signals.
+func (queue *redisQueue) AddBatchConsumerPro(ctx context.Context, sigChan chan Signal, tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
+	name, err := queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
+	go queue.consumerBatchConsumePro(ctx, sigChan, batchSize, timeout, consumer)
+	return name, nil
+}
+
+// RemoveBatchConsumerPro removes BatchConsumerPro via signal.
+func (queue *redisQueue) RemoveBatchConsumerPro(name string) error {
+	if err := queue.removeConsumer(name); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AddBatchConsumerFunc is similar to AddConsumerFunc, but for batches of deliveries
 // timeout limits the amount of time waiting to fill an entire batch
 // The timer is only started when the first message in a batch is received
@@ -410,6 +430,50 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 	}
 }
 
+// consumerBatchConsumePro is a copy of consumerBatchConsume with context.Context and channel to handle external signals.
+func (queue *redisQueue) consumerBatchConsumePro(ctx context.Context, sigChan chan Signal, batchSize int64, timeout time.Duration, consumer BatchConsumer) {
+	defer func() {
+		queue.stopWg.Done()
+	}()
+	var batch []Delivery
+	for {
+		select {
+		case <-ctx.Done(): // stop consuming on Context done.
+			return
+		case <-queue.consumingStopped: // prefer this case
+			return
+		default:
+		}
+
+		select {
+		case <-queue.consumingStopped:
+			return
+		case signal := <-sigChan:
+			switch signal {
+			case sigStop: // stop consuming on signal.
+				return
+			case sigSkip: // skip consume iteration.
+				continue
+			case sigSleep: // stay IDLE for a second.
+				time.Sleep(time.Second)
+			}
+		case delivery, ok := <-queue.deliveryChan: // Wait for first delivery
+			if !ok { // deliveryChan closed
+				return
+			}
+
+			batch = append(batch, delivery)
+			batch, ok = queue.batchTimeout(batchSize, batch, timeout)
+			if !ok {
+				return
+			}
+
+			consumer.Consume(batch)
+			batch = batch[:0] // reset batch
+		}
+	}
+}
+
 func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	queue.lock.Lock()
 	defer queue.lock.Unlock()
@@ -428,6 +492,24 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	queue.stopWg.Add(1)
 	// log.Printf("rmq queue added consumer %s %s", queue, name)
 	return name, nil
+}
+
+func (queue *redisQueue) removeConsumer(name string) error {
+	queue.lock.Lock()
+	defer queue.lock.Unlock()
+
+	<-queue.StopConsuming()
+
+	if _, err := queue.redisClient.SRem(queue.consumersKey, name); err != nil {
+		return err
+	}
+
+	queue.stopWg.Done()
+
+	ch := queue.sigChannels.Get(name)
+	ch <- sigStop
+
+	return nil
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
