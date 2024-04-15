@@ -34,7 +34,7 @@ type Queue interface {
 	GetReadyMessages() ([]string, error)
 	GetUnackedMessages() ([]string, error)
 	GetRejectedMessages() ([]string, error)
-	RemoveMessage(message string, count int64) (int64, error)
+	RemoveMessage(list string, message string, count int64) (int64, error)
 
 	// internals
 	// used in cleaner
@@ -670,8 +670,18 @@ func (queue *redisQueue) GetRejectedMessages() ([]string, error) {
 	return queue.redisClient.LRange(queue.rejectedKey, 0, 1000)
 }
 
-func (queue *redisQueue) RemoveMessage(message string, count int64) (int64, error) {
-	return queue.redisClient.LRem(queue.readyKey, count, message)
+func (queue *redisQueue) RemoveMessage(list string, message string, count int64) (int64, error) {
+	var key string
+	switch list {
+	case "ready":
+		key = queue.readyKey
+	case "unacked":
+		key = queue.unackedKey
+	case "rejected":
+		key = queue.rejectedKey
+	}
+
+	return queue.redisClient.LRem(key, count, message)
 }
 
 // The caller of this method should be holding the queue.lock mutex

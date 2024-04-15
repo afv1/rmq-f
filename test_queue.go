@@ -7,7 +7,7 @@ type TestQueue struct {
 	LastDeliveries []string
 }
 
-func (queue *TestQueue) RemoveMessage(message string, count int64) (int64, error) {
+func (queue *TestQueue) RemoveMessage(list string, message string, count int64) (int64, error) {
 	return 0, nil
 }
 
