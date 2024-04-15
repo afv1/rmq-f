@@ -1,6 +1,8 @@
 package rmq
 
-import "time"
+import (
+	"time"
+)
 
 type RedisClient interface {
 	// simple keys
@@ -23,4 +25,6 @@ type RedisClient interface {
 
 	// special
 	FlushDb() error
+
+	LRange(key string, start, stop int64) ([]string, error)
 }

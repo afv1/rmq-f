@@ -31,6 +31,10 @@ type Queue interface {
 	Destroy() (readyCount, rejectedCount int64, err error)
 	Drain(count int64) ([]string, error)
 
+	GetReadyMessages() ([]string, error)
+	GetUnackedMessages() ([]string, error)
+	GetRejectedMessages() ([]string, error)
+
 	// internals
 	// used in cleaner
 	closeInStaleConnection() error
@@ -651,6 +655,18 @@ func (queue *redisQueue) rejectedCount() (int64, error) {
 
 func (queue *redisQueue) getConsumers() ([]string, error) {
 	return queue.redisClient.SMembers(queue.consumersKey)
+}
+
+func (queue *redisQueue) GetReadyMessages() ([]string, error) {
+	return queue.redisClient.LRange(queue.readyKey, 0, 1000)
+}
+
+func (queue *redisQueue) GetUnackedMessages() ([]string, error) {
+	return queue.redisClient.LRange(queue.unackedKey, 0, 1000)
+}
+
+func (queue *redisQueue) GetRejectedMessages() ([]string, error) {
+	return queue.redisClient.LRange(queue.rejectedKey, 0, 1000)
 }
 
 // The caller of this method should be holding the queue.lock mutex

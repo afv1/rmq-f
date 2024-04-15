@@ -76,3 +76,7 @@ func (wrapper RedisWrapper) FlushDb() error {
 	// NOTE: using Err() here because Result() string is always "OK"
 	return wrapper.rawClient.FlushDB(unusedContext).Err()
 }
+
+func (wrapper RedisWrapper) LRange(key string, start, stop int64) ([]string, error) {
+	return wrapper.rawClient.LRange(unusedContext, key, start, stop).Result()
+}
