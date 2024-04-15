@@ -10,6 +10,18 @@ type TestDelivery struct {
 	payload string
 }
 
+func (delivery *TestDelivery) SetPayload(payload string) error {
+	return nil
+}
+
+func (delivery *TestDelivery) SetPayloadAndReject(payload string) error {
+	return nil
+}
+
+func (delivery *TestDelivery) Return() error {
+	return nil
+}
+
 func NewTestDelivery(content interface{}) *TestDelivery {
 	if payload, ok := content.(string); ok {
 		return NewTestDeliveryString(payload)

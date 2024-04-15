@@ -16,6 +16,10 @@ type TestRedisClient struct {
 	mx    sync.Mutex
 }
 
+func (client *TestRedisClient) LRange(key string, start, stop int64) ([]string, error) {
+	return nil, nil
+}
+
 // NewTestRedisClient returns a NewTestRedisClient
 
 func NewTestRedisClient() *TestRedisClient {

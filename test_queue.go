@@ -7,6 +7,18 @@ type TestQueue struct {
 	LastDeliveries []string
 }
 
+func (queue *TestQueue) GetReadyMessages() ([]string, error) {
+	return nil, nil
+}
+
+func (queue *TestQueue) GetUnackedMessages() ([]string, error) {
+	return nil, nil
+}
+
+func (queue *TestQueue) GetRejectedMessages() ([]string, error) {
+	return nil, nil
+}
+
 func NewTestQueue(name string) *TestQueue {
 	queue := &TestQueue{name: name}
 	queue.Reset()
